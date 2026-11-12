@@ -3,7 +3,7 @@
  // GLOBAL VARIABLES
  // ======================================================
 
-const API_BASE_URL = "https://YOUR-RENDER-BACKEND.onrender.com";
+const API_BASE_URL =  "https://leave-management-system-1-ljsr.onrender.com";
 
 let token = localStorage.getItem("leaveToken");
 
