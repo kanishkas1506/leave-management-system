@@ -1,29 +1,22 @@
-// ======================================================
-// GLOBAL VARIABLES
-// ======================================================
 
-let token =
-    localStorage.getItem("leaveToken");
+ // ======================================================
+ // GLOBAL VARIABLES
+ // ======================================================
+
+const API_BASE_URL = "https://YOUR-RENDER-BACKEND.onrender.com";
+
+let token = localStorage.getItem("leaveToken");
 
 
 // ======================================================
 // ELEMENTS
 // ======================================================
 
-const loginSection =
-    document.getElementById("loginSection");
-
-const registerSection =
-    document.getElementById("registerSection");
-
-const studentDashboard =
-    document.getElementById("studentDashboard");
-
-const authorityDashboard =
-    document.getElementById("authorityDashboard");
-
-const logoutBtn =
-    document.getElementById("logoutBtn");
+const loginSection = document.getElementById("loginSection");
+const registerSection = document.getElementById("registerSection");
+const studentDashboard = document.getElementById("studentDashboard");
+const authorityDashboard = document.getElementById("authorityDashboard");
+const logoutBtn = document.getElementById("logoutBtn");
 
 
 // ======================================================
@@ -33,13 +26,9 @@ const logoutBtn =
 function showSection(section) {
 
     loginSection.classList.add("hidden");
-
     registerSection.classList.add("hidden");
-
     studentDashboard.classList.add("hidden");
-
     authorityDashboard.classList.add("hidden");
-
 
     section.classList.remove("hidden");
 }
@@ -49,50 +38,59 @@ function showSection(section) {
 // API FUNCTION
 // ======================================================
 
-async function api(
-    url,
-    options = {}
-) {
+async function api(url, options = {}) {
 
     const headers = {
-
-        "Content-Type":
-            "application/json",
-
+        "Content-Type": "application/json",
         ...(options.headers || {})
-
     };
 
-
     if (token) {
-
-        headers.Authorization =
-            `Bearer ${token}`;
+        headers.Authorization = `Bearer ${token}`;
     }
 
+    let response;
 
-    const response =
-        await fetch(
-            url,
+    try {
+
+        response = await fetch(
+            `${API_BASE_URL}${url}`,
             {
                 ...options,
                 headers
             }
         );
 
+    } catch (error) {
 
-    const data =
-        await response.json();
+        throw new Error(
+            "Unable to connect to server. Please check backend deployment."
+        );
+    }
 
+    const responseText = await response.text();
+
+    let data;
+
+    try {
+
+        data = JSON.parse(responseText);
+
+    } catch (error) {
+
+        console.error("Server response:", responseText);
+
+        throw new Error(
+            "Invalid server response. Check API URL and backend routes."
+        );
+    }
 
     if (!response.ok) {
 
         throw new Error(
-            data.message ||
-            "Something went wrong"
+            data.message || "Something went wrong"
         );
     }
-
 
     return data;
 }
@@ -102,18 +100,11 @@ async function api(
 // SHOW MESSAGE
 // ======================================================
 
-function showMessage(
-    element,
-    message,
-    success = false
-) {
+function showMessage(element, message, success = false) {
 
     element.textContent = message;
 
-    element.style.color =
-        success
-            ? "green"
-            : "red";
+    element.style.color = success ? "green" : "red";
 }
 
 
@@ -121,224 +112,132 @@ function showMessage(
 // LOGIN
 // ======================================================
 
-document
-    .getElementById("loginForm")
-    .addEventListener(
-        "submit",
-        async function (event) {
+document.getElementById("loginForm").addEventListener(
+    "submit",
+    async function (event) {
 
-            event.preventDefault();
+        event.preventDefault();
 
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+        const message = document.getElementById("loginMessage");
 
-            const email =
-                document.getElementById(
-                    "loginEmail"
-                ).value;
+        try {
 
-
-            const password =
-                document.getElementById(
-                    "loginPassword"
-                ).value;
-
-
-            const message =
-                document.getElementById(
-                    "loginMessage"
-                );
-
-
-            try {
-
-                const data =
-                    await api(
-                        "/api/login",
-                        {
-                            method: "POST",
-
-                            body: JSON.stringify({
-                                email,
-                                password
-                            })
-                        }
-                    );
-
-
-                token = data.token;
-
-
-                localStorage.setItem(
-                    "leaveToken",
-                    token
-                );
-
-
-                logoutBtn.classList.remove(
-                    "hidden"
-                );
-
-
-                if (
-                    data.user.role ===
-                    "authority"
-                ) {
-
-                    showSection(
-                        authorityDashboard
-                    );
-
-                    await loadAuthorityLeaves();
-
-                } else {
-
-                    showSection(
-                        studentDashboard
-                    );
-
-                    await loadStudentDashboard();
+            const data = await api(
+                "/api/login",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email,
+                        password
+                    })
                 }
+            );
 
-
-                message.textContent = "";
-
-
-            } catch (error) {
-
-                showMessage(
-                    message,
-                    error.message
-                );
+            if (!data.token || !data.user) {
+                throw new Error("Invalid login response from server");
             }
+
+            token = data.token;
+
+            localStorage.setItem("leaveToken", token);
+
+            logoutBtn.classList.remove("hidden");
+
+            if (data.user.role === "authority") {
+
+                showSection(authorityDashboard);
+                await loadAuthorityLeaves();
+
+            } else {
+
+                showSection(studentDashboard);
+                await loadStudentDashboard();
+            }
+
+            message.textContent = "";
+
+        } catch (error) {
+
+            showMessage(message, error.message);
         }
-    );
+    }
+);
 
 
 // ======================================================
 // SHOW REGISTER
 // ======================================================
 
-document
-    .getElementById(
-        "showRegisterBtn"
-    )
-    .addEventListener(
-        "click",
-        function () {
+document.getElementById("showRegisterBtn").addEventListener(
+    "click",
+    function () {
 
-            showSection(
-                registerSection
-            );
-        }
-    );
+        showSection(registerSection);
+    }
+);
 
 
 // ======================================================
 // SHOW LOGIN
 // ======================================================
 
-document
-    .getElementById(
-        "showLoginBtn"
-    )
-    .addEventListener(
-        "click",
-        function () {
+document.getElementById("showLoginBtn").addEventListener(
+    "click",
+    function () {
 
-            showSection(
-                loginSection
-            );
-        }
-    );
+        showSection(loginSection);
+    }
+);
 
 
 // ======================================================
 // REGISTER
 // ======================================================
 
-document
-    .getElementById("registerForm")
-    .addEventListener(
-        "submit",
-        async function (event) {
+document.getElementById("registerForm").addEventListener(
+    "submit",
+    async function (event) {
 
-            event.preventDefault();
+        event.preventDefault();
 
+        const username = document.getElementById("registerName").value;
+        const rollNumber = document.getElementById("registerRoll").value;
+        const email = document.getElementById("registerEmail").value;
+        const password = document.getElementById("registerPassword").value;
 
-            const username =
-                document.getElementById(
-                    "registerName"
-                ).value;
+        const message = document.getElementById("registerMessage");
 
+        try {
 
-            const rollNumber =
-                document.getElementById(
-                    "registerRoll"
-                ).value;
+            await api(
+                "/api/register",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        username,
+                        rollNumber,
+                        email,
+                        password
+                    })
+                }
+            );
 
+            showMessage(
+                message,
+                "Registration successful. Please login.",
+                true
+            );
 
-            const email =
-                document.getElementById(
-                    "registerEmail"
-                ).value;
+            document.getElementById("registerForm").reset();
 
+        } catch (error) {
 
-            const password =
-                document.getElementById(
-                    "registerPassword"
-                ).value;
-
-
-            const message =
-                document.getElementById(
-                    "registerMessage"
-                );
-
-
-            try {
-
-                await api(
-                    "/api/register",
-                    {
-                        method: "POST",
-
-                        body: JSON.stringify({
-
-                            username,
-
-                            rollNumber,
-
-                            email,
-
-                            password
-
-                        })
-                    }
-                );
-
-
-                showMessage(
-                    message,
-                    "Registration successful. Please login.",
-                    true
-                );
-
-
-                document
-                    .getElementById(
-                        "registerForm"
-                    )
-                    .reset();
-
-
-            } catch (error) {
-
-                showMessage(
-                    message,
-                    error.message
-                );
-            }
+            showMessage(message, error.message);
         }
-    );
+    }
+);
 
 
 // ======================================================
@@ -349,48 +248,24 @@ async function loadStudentDashboard() {
 
     try {
 
-        const userData =
-            await api(
-                "/api/me"
-            );
+        const userData = await api("/api/me");
 
+        const balance = await api("/api/leave-balance");
 
-        const balance =
-            await api(
-                "/api/leave-balance"
-            );
+        document.getElementById("studentWelcome").textContent =
+            `Welcome, ${userData.user.username} (${userData.user.rollNumber})`;
 
+        document.getElementById("casualBalance").textContent =
+            balance.casualLeave;
 
-        document
-            .getElementById(
-                "studentWelcome"
-            )
-            .textContent =
-                `Welcome, ${userData.user.username} (${userData.user.rollNumber})`;
-
-
-        document
-            .getElementById(
-                "casualBalance"
-            )
-            .textContent =
-                balance.casualLeave;
-
-
-        document
-            .getElementById(
-                "medicalBalance"
-            )
-            .textContent =
-                balance.medicalLeave;
-
+        document.getElementById("medicalBalance").textContent =
+            balance.medicalLeave;
 
         await loadStudentLeaves();
 
-
     } catch (error) {
 
-        console.error(error);
+        console.error("Student dashboard error:", error);
     }
 }
 
@@ -399,93 +274,50 @@ async function loadStudentDashboard() {
 // APPLY LEAVE
 // ======================================================
 
-document
-    .getElementById("leaveForm")
-    .addEventListener(
-        "submit",
-        async function (event) {
+document.getElementById("leaveForm").addEventListener(
+    "submit",
+    async function (event) {
 
-            event.preventDefault();
+        event.preventDefault();
 
+        const leaveType = document.getElementById("leaveType").value;
+        const fromDate = document.getElementById("fromDate").value;
+        const toDate = document.getElementById("toDate").value;
+        const reason = document.getElementById("reason").value;
 
-            const leaveType =
-                document.getElementById(
-                    "leaveType"
-                ).value;
+        const message = document.getElementById("leaveMessage");
 
+        try {
 
-            const fromDate =
-                document.getElementById(
-                    "fromDate"
-                ).value;
+            await api(
+                "/api/apply-leave",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        leaveType,
+                        fromDate,
+                        toDate,
+                        reason
+                    })
+                }
+            );
 
+            showMessage(
+                message,
+                "Leave request submitted successfully.",
+                true
+            );
 
-            const toDate =
-                document.getElementById(
-                    "toDate"
-                ).value;
+            document.getElementById("leaveForm").reset();
 
+            await loadStudentDashboard();
 
-            const reason =
-                document.getElementById(
-                    "reason"
-                ).value;
+        } catch (error) {
 
-
-            const message =
-                document.getElementById(
-                    "leaveMessage"
-                );
-
-
-            try {
-
-                await api(
-                    "/api/apply-leave",
-                    {
-                        method: "POST",
-
-                        body: JSON.stringify({
-
-                            leaveType,
-
-                            fromDate,
-
-                            toDate,
-
-                            reason
-
-                        })
-                    }
-                );
-
-
-                showMessage(
-                    message,
-                    "Leave request submitted successfully.",
-                    true
-                );
-
-
-                document
-                    .getElementById(
-                        "leaveForm"
-                    )
-                    .reset();
-
-
-                await loadStudentDashboard();
-
-
-            } catch (error) {
-
-                showMessage(
-                    message,
-                    error.message
-                );
-            }
+            showMessage(message, error.message);
         }
-    );
+    }
+);
 
 
 // ======================================================
@@ -496,99 +328,43 @@ async function loadStudentLeaves() {
 
     try {
 
-        const data =
-            await api(
-                "/api/my-leaves"
-            );
+        const data = await api("/api/my-leaves");
 
-
-        const table =
-            document.getElementById(
-                "studentLeaveTable"
-            );
-
+        const table = document.getElementById("studentLeaveTable");
 
         table.innerHTML = "";
 
-
-        if (data.leaves.length === 0) {
+        if (!data.leaves || data.leaves.length === 0) {
 
             table.innerHTML = `
                 <tr>
-                    <td colspan="7">
-                        No leave requests found
-                    </td>
+                    <td colspan="7">No leave requests found</td>
                 </tr>
             `;
 
             return;
         }
 
+        data.leaves.forEach(function (leave) {
 
-        data.leaves.forEach(
-            function (leave) {
+            const row = document.createElement("tr");
 
-                const row =
-                    document.createElement(
-                        "tr"
-                    );
+            row.innerHTML = `
+                <td>${escapeHTML(leave.leaveType)}</td>
+                <td>${formatDate(leave.fromDate)}</td>
+                <td>${formatDate(leave.toDate)}</td>
+                <td>${escapeHTML(leave.days)}</td>
+                <td>${escapeHTML(leave.reason)}</td>
+                <td>${statusBadge(leave.status)}</td>
+                <td>${escapeHTML(leave.authorityRemarks || "-")}</td>
+            `;
 
-
-                row.innerHTML = `
-
-                    <td>
-                        ${leave.leaveType}
-                    </td>
-
-                    <td>
-                        ${formatDate(
-                            leave.fromDate
-                        )}
-                    </td>
-
-                    <td>
-                        ${formatDate(
-                            leave.toDate
-                        )}
-                    </td>
-
-                    <td>
-                        ${leave.days}
-                    </td>
-
-                    <td>
-                        ${escapeHTML(
-                            leave.reason
-                        )}
-                    </td>
-
-                    <td>
-                        ${statusBadge(
-                            leave.status
-                        )}
-                    </td>
-
-                    <td>
-                        ${
-                            escapeHTML(
-                                leave.authorityRemarks ||
-                                "-"
-                            )
-                        }
-                    </td>
-
-                `;
-
-
-                table.appendChild(row);
-
-            }
-        );
-
+            table.appendChild(row);
+        });
 
     } catch (error) {
 
-        console.error(error);
+        console.error("Student leaves error:", error);
     }
 }
 
@@ -601,205 +377,76 @@ async function loadAuthorityLeaves() {
 
     try {
 
-        const data =
-            await api(
-                "/api/authority/leaves"
-            );
+        const data = await api("/api/authority/leaves");
 
+        const leaves = data.leaves || [];
 
-        const leaves =
-            data.leaves;
+        document.getElementById("totalRequests").textContent =
+            leaves.length;
 
+        document.getElementById("pendingRequests").textContent =
+            leaves.filter(leave => leave.status === "Pending").length;
 
-        document
-            .getElementById(
-                "totalRequests"
-            )
-            .textContent =
-                leaves.length;
+        document.getElementById("approvedRequests").textContent =
+            leaves.filter(leave => leave.status === "Approved").length;
 
+        document.getElementById("rejectedRequests").textContent =
+            leaves.filter(leave => leave.status === "Rejected").length;
 
-        document
-            .getElementById(
-                "pendingRequests"
-            )
-            .textContent =
-                leaves.filter(
-                    leave =>
-                        leave.status ===
-                        "Pending"
-                ).length;
-
-
-        document
-            .getElementById(
-                "approvedRequests"
-            )
-            .textContent =
-                leaves.filter(
-                    leave =>
-                        leave.status ===
-                        "Approved"
-                ).length;
-
-
-        document
-            .getElementById(
-                "rejectedRequests"
-            )
-            .textContent =
-                leaves.filter(
-                    leave =>
-                        leave.status ===
-                        "Rejected"
-                ).length;
-
-
-        const table =
-            document.getElementById(
-                "authorityLeaveTable"
-            );
-
+        const table = document.getElementById("authorityLeaveTable");
 
         table.innerHTML = "";
-
 
         if (leaves.length === 0) {
 
             table.innerHTML = `
                 <tr>
-                    <td colspan="9">
-                        No leave requests found
-                    </td>
+                    <td colspan="9">No leave requests found</td>
                 </tr>
             `;
 
             return;
         }
 
+        leaves.forEach(function (leave) {
 
-        leaves.forEach(
-            function (leave) {
+            const row = document.createElement("tr");
 
-                const row =
-                    document.createElement(
-                        "tr"
-                    );
+            let action = "-";
 
+            if (leave.status === "Pending") {
 
-                let action = "-";
+                action = `
+                    <button class="approve-btn"
+                        onclick="updateLeave('${leave._id}', 'Approved')">
+                        Approve
+                    </button>
 
-
-                if (
-                    leave.status ===
-                    "Pending"
-                ) {
-
-                    action = `
-
-                        <button
-                            class="approve-btn"
-                            onclick="updateLeave(
-                                '${leave._id}',
-                                'Approved'
-                            )"
-                        >
-                            Approve
-                        </button>
-
-
-                        <button
-                            class="reject-btn"
-                            onclick="updateLeave(
-                                '${leave._id}',
-                                'Rejected'
-                            )"
-                        >
-                            Reject
-                        </button>
-
-                    `;
-                }
-
-
-                row.innerHTML = `
-
-                    <td>
-                        ${
-                            escapeHTML(
-                                leave.student?.username ||
-                                "-"
-                            )
-                        }
-                    </td>
-
-
-                    <td>
-                        ${
-                            escapeHTML(
-                                leave.student?.rollNumber ||
-                                "-"
-                            )
-                        }
-                    </td>
-
-
-                    <td>
-                        ${leave.leaveType}
-                    </td>
-
-
-                    <td>
-                        ${formatDate(
-                            leave.fromDate
-                        )}
-                    </td>
-
-
-                    <td>
-                        ${formatDate(
-                            leave.toDate
-                        )}
-                    </td>
-
-
-                    <td>
-                        ${leave.days}
-                    </td>
-
-
-                    <td>
-                        ${
-                            escapeHTML(
-                                leave.reason
-                            )
-                        }
-                    </td>
-
-
-                    <td>
-                        ${statusBadge(
-                            leave.status
-                        )}
-                    </td>
-
-
-                    <td>
-                        ${action}
-                    </td>
-
+                    <button class="reject-btn"
+                        onclick="updateLeave('${leave._id}', 'Rejected')">
+                        Reject
+                    </button>
                 `;
-
-
-                table.appendChild(row);
-
             }
-        );
 
+            row.innerHTML = `
+                <td>${escapeHTML(leave.student?.username || "-")}</td>
+                <td>${escapeHTML(leave.student?.rollNumber || "-")}</td>
+                <td>${escapeHTML(leave.leaveType)}</td>
+                <td>${formatDate(leave.fromDate)}</td>
+                <td>${formatDate(leave.toDate)}</td>
+                <td>${escapeHTML(leave.days)}</td>
+                <td>${escapeHTML(leave.reason)}</td>
+                <td>${statusBadge(leave.status)}</td>
+                <td>${action}</td>
+            `;
+
+            table.appendChild(row);
+        });
 
     } catch (error) {
 
-        console.error(error);
+        console.error("Authority dashboard error:", error);
 
         alert(error.message);
     }
@@ -810,47 +457,32 @@ async function loadAuthorityLeaves() {
 // APPROVE / REJECT LEAVE
 // ======================================================
 
-async function updateLeave(
-    leaveId,
-    status
-) {
+async function updateLeave(leaveId, status) {
 
     let remarks = "";
 
-
     if (status === "Rejected") {
 
-        remarks =
-            prompt(
-                "Enter rejection reason:"
-            );
+        remarks = prompt("Enter rejection reason:");
 
+        if (!remarks || !remarks.trim()) {
 
-        if (!remarks) {
-
-            alert(
-                "Rejection reason is required"
-            );
+            alert("Rejection reason is required");
 
             return;
         }
     }
-
 
     if (status === "Approved") {
 
-        const confirmApprove =
-            confirm(
-                "Approve this leave request?"
-            );
-
+        const confirmApprove = confirm(
+            "Approve this leave request?"
+        );
 
         if (!confirmApprove) {
-
             return;
         }
     }
-
 
     try {
 
@@ -858,27 +490,18 @@ async function updateLeave(
             `/api/authority/leaves/${leaveId}`,
             {
                 method: "PATCH",
-
                 body: JSON.stringify({
-
                     status,
-
-                    authorityRemarks:
-                        remarks
-
+                    authorityRemarks: remarks
                 })
             }
         );
 
-
         await loadAuthorityLeaves();
-
 
     } catch (error) {
 
-        alert(
-            error.message
-        );
+        alert(error.message);
     }
 }
 
@@ -887,16 +510,13 @@ async function updateLeave(
 // REFRESH STAFF DASHBOARD
 // ======================================================
 
-document
-    .getElementById("refreshBtn")
-    .addEventListener(
-        "click",
-        function () {
+document.getElementById("refreshBtn").addEventListener(
+    "click",
+    function () {
 
-            loadAuthorityLeaves();
-
-        }
-    );
+        loadAuthorityLeaves();
+    }
+);
 
 
 // ======================================================
@@ -907,29 +527,15 @@ logoutBtn.addEventListener(
     "click",
     function () {
 
-        localStorage.removeItem(
-            "leaveToken"
-        );
+        localStorage.removeItem("leaveToken");
 
         token = null;
 
+        logoutBtn.classList.add("hidden");
 
-        logoutBtn.classList.add(
-            "hidden"
-        );
+        showSection(loginSection);
 
-
-        showSection(
-            loginSection
-        );
-
-
-        document
-            .getElementById(
-                "loginForm"
-            )
-            .reset();
-
+        document.getElementById("loginForm").reset();
     }
 );
 
@@ -944,11 +550,7 @@ function formatDate(date) {
         return "-";
     }
 
-
-    return new Date(date)
-        .toLocaleDateString(
-            "en-IN"
-        );
+    return new Date(date).toLocaleDateString("en-IN");
 }
 
 
@@ -958,27 +560,20 @@ function formatDate(date) {
 
 function statusBadge(status) {
 
-    let className =
-        "status-pending";
-
+    let className = "status-pending";
 
     if (status === "Approved") {
 
-        className =
-            "status-approved";
+        className = "status-approved";
 
-    } else if (
-        status === "Rejected"
-    ) {
+    } else if (status === "Rejected") {
 
-        className =
-            "status-rejected";
+        className = "status-rejected";
     }
-
 
     return `
         <span class="status ${className}">
-            ${status}
+            ${escapeHTML(status)}
         </span>
     `;
 }
@@ -993,7 +588,6 @@ function escapeHTML(value) {
     if (value === null || value === undefined) {
         return "";
     }
-
 
     return String(value)
         .replaceAll("&", "&amp;")
@@ -1012,60 +606,43 @@ async function restoreSession() {
 
     if (!token) {
 
-        showSection(
-            loginSection
-        );
+        showSection(loginSection);
 
         return;
     }
 
-
     try {
 
-        const data =
-            await api(
-                "/api/me"
-            );
+        const data = await api("/api/me");
 
+        if (!data.user) {
+            throw new Error("Invalid session");
+        }
 
-        logoutBtn.classList.remove(
-            "hidden"
-        );
+        logoutBtn.classList.remove("hidden");
 
+        if (data.user.role === "authority") {
 
-        if (
-            data.user.role ===
-            "authority"
-        ) {
-
-            showSection(
-                authorityDashboard
-            );
+            showSection(authorityDashboard);
 
             await loadAuthorityLeaves();
 
         } else {
 
-            showSection(
-                studentDashboard
-            );
+            showSection(studentDashboard);
 
             await loadStudentDashboard();
         }
 
-
     } catch (error) {
 
-        localStorage.removeItem(
-            "leaveToken"
-        );
+        localStorage.removeItem("leaveToken");
 
         token = null;
 
+        logoutBtn.classList.add("hidden");
 
-        showSection(
-            loginSection
-        );
+        showSection(loginSection);
     }
 }
 
