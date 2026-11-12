@@ -1,323 +1,452 @@
 
-require("dotenv").config();
+const API_BASE_URL = "https://leave-management-system-1-ljsr.onrender.com";
 
-const express = require("express");
-const path = require("path");
-const bcrypt = require("bcryptjs");
+let authToken = localStorage.getItem("token");
+let currentUser = null;
 
-const connectDB = require("./config/db");
-const User = require("./models/User");
-const leaveRoutes = require("./routes/leaveRoutes");
+// GET HTML ELEMENT
+const $ = (id) => document.getElementById(id);
 
-const app = express();
-const PORT = process.env.PORT || 5050;
-
-
-// ======================================================
-// JWT SECRET CHECK
-// ======================================================
-
-if (!process.env.JWT_SECRET) {
-    console.error("JWT_SECRET is missing");
-    process.exit(1);
-}
-
-
-// ======================================================
-// CORS CONFIGURATION
-// ======================================================
-
-app.use((req, res, next) => {
-
-    const allowedOrigin =
-        "https://kanishkas1506.github.io";
-
-    const origin = req.headers.origin;
-
-    if (origin === allowedOrigin) {
-
-        res.header(
-            "Access-Control-Allow-Origin",
-            allowedOrigin
-        );
-
-        res.header(
-            "Vary",
-            "Origin"
-        );
-    }
-
-    res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    );
-
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
-    );
-
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
-
-    next();
-});
-
-
-// ======================================================
-// MIDDLEWARE
-// ======================================================
-
-app.use(express.json());
-
-app.use(
-    express.static(
-        path.join(__dirname, "public")
-    )
-);
-
-
-// ======================================================
-// API ROUTES
-// ======================================================
-
-app.use("/api", leaveRoutes);
-
-
-// ======================================================
-// CREATE / UPDATE AUTHORITY ACCOUNT
-// ======================================================
-
-async function createAuthority() {
-
-    const email =
-        process.env.AUTHORITY_EMAIL?.trim().toLowerCase();
-
-    const password =
-        process.env.AUTHORITY_PASSWORD;
-
-    const username =
-        process.env.AUTHORITY_NAME ||
-        "Leave Administrator";
-
-    if (!email || !password) {
-
-        throw new Error(
-            "AUTHORITY_EMAIL and AUTHORITY_PASSWORD are required"
-        );
-    }
-
-    let authority = await User.findOne({ email });
-
-    const hashedPassword =
-        await bcrypt.hash(password, 12);
-
-    if (!authority) {
-
-        authority = await User.create({
-
-            username,
-
-            email,
-
-            password: hashedPassword,
-
-            role: "authority",
-
-            rollNumber: "",
-
-            casualLeave: 0,
-
-            medicalLeave: 0
-
-        });
-
-        console.log(
-            "Authority account created successfully"
-        );
-
-    } else {
-
-        authority.username = username;
-
-        authority.password = hashedPassword;
-
-        authority.role = "authority";
-
-        await authority.save();
-
-        console.log(
-            "Authority account updated successfully"
-        );
-    }
-}
-
-
-// ======================================================
-// START SERVER
-// ======================================================
-
-async function startServer() {
-
+// API REQUEST FUNCTION
+async function apiRequest(endpoint, method = "GET", data = null) {
     try {
+        const headers = {
+            "Content-Type": "application/json"
+        };
 
-        await connectDB();
+        if (authToken) {
+            headers.Authorization = `Bearer ${authToken}`;
+        }
 
-        await createAuthority();
+        const options = {
+            method,
+            headers
+        };
 
-        app.listen(PORT, "0.0.0.0", () => {
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
 
-            console.log(
-                `Server running on port ${PORT}`
-            );
+        const response = await fetch(
+            API_BASE_URL + endpoint,
+            options
+        );
 
-        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || result.error || "Request failed");
+        }
+
+        return result;
 
     } catch (error) {
-
-        console.error(
-            "Application startup failed:",
-            error.message
-        );
-
-        process.exit(1);
+        console.error("API Error:", error);
+        throw error;
     }
 }
 
+// SHOW MESSAGE
+function showMessage(id, message, success = false) {
+    const element = $(id);
 
-// ======================================================
-// START APPLICATION
-// ======================================================
+    if (!element) return;
 
-startServer();
-
-require("dotenv").config();
-
-const express = require("express");
-const path = require("path");
-const bcrypt = require("bcryptjs");
-
-const connectDB = require("./config/db");
-const User = require("./models/User");
-const leaveRoutes = require("./routes/leaveRoutes");
-
-const app = express();
-const PORT = process.env.PORT || 5050;
-
-// JWT SECRET CHECK
-if (!process.env.JWT_SECRET) {
-    console.error("JWT_SECRET is missing in Render Environment");
-    process.exit(1);
+    element.textContent = message;
+    element.style.color = success ? "green" : "red";
 }
 
-// CORS CONFIGURATION
-app.use((req, res, next) => {
-    const allowedOrigin = "https://kanishkas1506.github.io";
-    const origin = req.headers.origin;
-
-    if (origin === allowedOrigin) {
-        res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-        res.setHeader("Vary", "Origin");
-    }
-
-    res.setHeader(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    );
-
-    res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization"
-    );
-
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
-
-    next();
-});
-
-// MIDDLEWARE
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// FRONTEND STATIC FILES
-app.use(express.static(path.join(__dirname, "public")));
-
-// SERVER HEALTH CHECK
-app.get("/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Leave Management Server is running"
+// HIDE ALL SECTIONS
+function hideAllSections() {
+    [
+        "loginSection",
+        "registerSection",
+        "studentDashboard",
+        "authorityDashboard"
+    ].forEach(id => {
+        $(id).classList.add("hidden");
     });
+}
+
+// LOGIN / REGISTER NAVIGATION
+$("showRegisterBtn").addEventListener("click", () => {
+    hideAllSections();
+    $("registerSection").classList.remove("hidden");
 });
 
-// API ROUTES
-app.use("/api", leaveRoutes);
+$("showLoginBtn").addEventListener("click", () => {
+    hideAllSections();
+    $("loginSection").classList.remove("hidden");
+});
 
-// CREATE / UPDATE AUTHORITY ACCOUNT
-async function createAuthority() {
-    const email = process.env.AUTHORITY_EMAIL
-        ? process.env.AUTHORITY_EMAIL.trim().toLowerCase()
-        : "";
+// STUDENT REGISTRATION
+$("registerForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-    const password = process.env.AUTHORITY_PASSWORD;
+    const userData = {
+        username: $("registerName").value.trim(),
+        rollNumber: $("registerRoll").value.trim(),
+        email: $("registerEmail").value.trim().toLowerCase(),
+        password: $("registerPassword").value
+    };
 
-    const username =
-        process.env.AUTHORITY_NAME || "Leave Administrator";
+    try {
+        showMessage("registerMessage", "Registering...");
 
-    if (!email || !password) {
-        throw new Error(
-            "AUTHORITY_EMAIL or AUTHORITY_PASSWORD is missing in Render Environment"
+        const result = await apiRequest(
+            "/api/register",
+            "POST",
+            userData
         );
+
+        showMessage(
+            "registerMessage",
+            result.message || "Registration successful! Please login.",
+            true
+        );
+
+        $("registerForm").reset();
+
+    } catch (error) {
+        showMessage("registerMessage", error.message);
     }
+});
 
-    let authority = await User.findOne({ email });
+// LOGIN
+$("loginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const email = $("loginEmail").value.trim().toLowerCase();
+    const password = $("loginPassword").value;
 
-    if (!authority) {
-        await User.create({
-            username,
-            email,
-            password: hashedPassword,
-            role: "authority",
-            rollNumber: "",
-            casualLeave: 0,
-            medicalLeave: 0
-        });
+    try {
+        showMessage("loginMessage", "Logging in...");
 
-        console.log("Authority account created successfully");
-    } else {
-        authority.username = username;
-        authority.password = hashedPassword;
-        authority.role = "authority";
+        const result = await apiRequest(
+            "/api/login",
+            "POST",
+            { email, password }
+        );
 
-        await authority.save();
+        const token =
+            result.token ||
+            result.accessToken;
 
-        console.log("Authority account updated successfully");
+        if (!token) {
+            throw new Error("Login response does not contain a token");
+        }
+
+        authToken = token;
+        localStorage.setItem("token", authToken);
+
+        currentUser =
+            result.user ||
+            result;
+
+        await loadUserDashboard();
+
+    } catch (error) {
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem("token");
+
+        showMessage("loginMessage", error.message);
+    }
+});
+
+// LOAD USER DASHBOARD
+async function loadUserDashboard() {
+    try {
+        const result = await apiRequest("/api/me");
+
+        currentUser = result.user || result;
+
+        hideAllSections();
+
+        $("logoutBtn").classList.remove("hidden");
+
+        if (currentUser.role === "authority") {
+            $("authorityDashboard").classList.remove("hidden");
+            await loadAuthorityLeaves();
+        } else {
+            $("studentDashboard").classList.remove("hidden");
+            $("studentWelcome").textContent =
+                "Welcome, " + (currentUser.username || "Student");
+
+            await loadStudentData();
+        }
+
+    } catch (error) {
+        console.error("Dashboard loading error:", error);
+
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem("token");
+
+        $("logoutBtn").classList.add("hidden");
+        hideAllSections();
+        $("loginSection").classList.remove("hidden");
+
+        showMessage("loginMessage", error.message);
     }
 }
 
-// START SERVER
-async function startServer() {
+// STUDENT DASHBOARD DATA
+async function loadStudentData() {
+    await loadLeaveBalance();
+    await loadMyLeaves();
+}
+
+// LEAVE BALANCE
+async function loadLeaveBalance() {
     try {
-        await connectDB();
+        const result = await apiRequest("/api/leave-balance");
 
-        await createAuthority();
+        const balance = result.balance || result;
 
-        app.listen(PORT, "0.0.0.0", () => {
-            console.log("================================");
-            console.log("Leave Management Server Started");
-            console.log("Port:", PORT);
-            console.log("================================");
+        $("casualBalance").textContent =
+            balance.casualLeave ?? balance.casual ?? 0;
+
+        $("medicalBalance").textContent =
+            balance.medicalLeave ?? balance.medical ?? 0;
+
+    } catch (error) {
+        console.error("Leave balance error:", error);
+    }
+}
+
+// APPLY LEAVE
+$("leaveForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const fromDate = $("fromDate").value;
+    const toDate = $("toDate").value;
+
+    if (new Date(toDate) < new Date(fromDate)) {
+        showMessage("leaveMessage", "To Date cannot be before From Date");
+        return;
+    }
+
+    const leaveData = {
+        leaveType: $("leaveType").value,
+        fromDate,
+        toDate,
+        reason: $("reason").value.trim()
+    };
+
+    try {
+        showMessage("leaveMessage", "Submitting leave request...");
+
+        const result = await apiRequest(
+            "/api/apply-leave",
+            "POST",
+            leaveData
+        );
+
+        showMessage(
+            "leaveMessage",
+            result.message || "Leave request submitted successfully",
+            true
+        );
+
+        $("leaveForm").reset();
+
+        await loadStudentData();
+
+    } catch (error) {
+        showMessage("leaveMessage", error.message);
+    }
+});
+
+// STUDENT LEAVE HISTORY
+async function loadMyLeaves() {
+    try {
+        const result = await apiRequest("/api/my-leaves");
+
+        const leaves = Array.isArray(result)
+            ? result
+            : result.leaves || [];
+
+        const table = $("studentLeaveTable");
+        table.innerHTML = "";
+
+        if (leaves.length === 0) {
+            table.innerHTML =
+                '<tr><td colspan="7">No leave requests found</td></tr>';
+            return;
+        }
+
+        leaves.forEach(leave => {
+            const row = document.createElement("tr");
+
+            const values = [
+                leave.leaveType || leave.type || "-",
+                formatDate(leave.fromDate),
+                formatDate(leave.toDate),
+                leave.days ?? calculateDays(leave.fromDate, leave.toDate),
+                leave.reason || "-",
+                leave.status || "Pending",
+                leave.remarks || "-"
+            ];
+
+            values.forEach(value => {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+
+            table.appendChild(row);
         });
 
     } catch (error) {
-        console.error("Application startup failed:", error);
-        process.exit(1);
+        console.error("My leaves error:", error);
     }
 }
 
-startServer();
+// AUTHORITY DASHBOARD
+async function loadAuthorityLeaves() {
+    try {
+        const result = await apiRequest("/api/authority/leaves");
+
+        const leaves = Array.isArray(result)
+            ? result
+            : result.leaves || [];
+
+        $("totalRequests").textContent = leaves.length;
+
+        $("pendingRequests").textContent =
+            leaves.filter(l => l.status === "Pending").length;
+
+        $("approvedRequests").textContent =
+            leaves.filter(l => l.status === "Approved").length;
+
+        $("rejectedRequests").textContent =
+            leaves.filter(l => l.status === "Rejected").length;
+
+        const table = $("authorityLeaveTable");
+        table.innerHTML = "";
+
+        if (leaves.length === 0) {
+            table.innerHTML =
+                '<tr><td colspan="9">No leave requests found</td></tr>';
+            return;
+        }
+
+        leaves.forEach(leave => {
+            const row = document.createElement("tr");
+
+            const values = [
+                leave.student?.username || leave.username || "-",
+                leave.student?.rollNumber || leave.rollNumber || "-",
+                leave.leaveType || leave.type || "-",
+                formatDate(leave.fromDate),
+                formatDate(leave.toDate),
+                leave.days ?? calculateDays(leave.fromDate, leave.toDate),
+                leave.reason || "-",
+                leave.status || "Pending"
+            ];
+
+            values.forEach(value => {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+
+            const actionCell = document.createElement("td");
+
+            if ((leave.status || "").toLowerCase() === "pending") {
+                const approveBtn = document.createElement("button");
+                approveBtn.textContent = "Approve";
+                approveBtn.addEventListener("click", () => {
+                    updateLeaveStatus(leave._id, "Approved");
+                });
+
+                const rejectBtn = document.createElement("button");
+                rejectBtn.textContent = "Reject";
+                rejectBtn.addEventListener("click", () => {
+                    updateLeaveStatus(leave._id, "Rejected");
+                });
+
+                actionCell.append(approveBtn, rejectBtn);
+            } else {
+                actionCell.textContent = "Completed";
+            }
+
+            row.appendChild(actionCell);
+            table.appendChild(row);
+        });
+
+    } catch (error) {
+        console.error("Authority leaves error:", error);
+        alert(error.message);
+    }
+}
+
+// APPROVE / REJECT LEAVE
+async function updateLeaveStatus(leaveId, status) {
+    const remarks = prompt("Enter remarks (optional):");
+
+    if (remarks === null) return;
+
+    try {
+        const result = await apiRequest(
+            `/api/authority/leaves/${leaveId}`,
+            "PATCH",
+            { status, remarks }
+        );
+
+        alert(result.message || `Leave ${status.toLowerCase()} successfully`);
+
+        await loadAuthorityLeaves();
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+// REFRESH AUTHORITY DASHBOARD
+$("refreshBtn").addEventListener("click", () => {
+    loadAuthorityLeaves();
+});
+
+// LOGOUT
+$("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("token");
+
+    authToken = null;
+    currentUser = null;
+
+    $("logoutBtn").classList.add("hidden");
+
+    $("loginForm").reset();
+
+    hideAllSections();
+    $("loginSection").classList.remove("hidden");
+});
+
+// DATE FORMAT
+function formatDate(date) {
+    if (!date) return "-";
+
+    return new Date(date).toLocaleDateString("en-IN");
+}
+
+// CALCULATE LEAVE DAYS
+function calculateDays(from, to) {
+    if (!from || !to) return 0;
+
+    const start = new Date(from);
+    const end = new Date(to);
+
+    return Math.round((end - start) / 86400000) + 1;
+}
+
+// AUTOMATIC LOGIN SESSION CHECK
+document.addEventListener("DOMContentLoaded", async () => {
+    if (authToken) {
+        await loadUserDashboard();
+    } else {
+        hideAllSections();
+        $("loginSection").classList.remove("hidden");
+    }
+});
